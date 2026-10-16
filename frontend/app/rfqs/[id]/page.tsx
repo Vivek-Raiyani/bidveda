@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, use } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { rfqApi, quoteApi } from "@/lib/api";
-import { RFQ, StatusHistoryItem, RFQLineItemCreate } from "@/types/rfq";
+import { RFQ, StatusHistoryItem } from "@/types/rfq";
 import {
   Quote,
   RFQComparisonView,
@@ -17,16 +18,13 @@ import { RFQStatusBadge, QuoteStatusBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { FileUpload } from "@/components/ui/file-upload";
+import { EditRFQModal } from "@/components/rfqs/edit-rfq-modal";
 import {
   parseDescriptionAndAttachment,
-  formatDescriptionWithAttachment,
   downloadFile,
-  ParsedAttachment,
 } from "@/lib/attachments";
 import {
   ArrowLeft,
-  Clock,
   DollarSign,
   Send,
   Award,
@@ -46,46 +44,17 @@ import {
   MapPin,
   Calendar,
   AlertCircle,
-  Plus,
-  Trash2,
-  Paperclip,
-  Save,
 } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-const DEFAULT_CATEGORIES = [
-  "IT Hardware",
-  "Office Supplies",
-  "Industrial Machinery",
-  "Office Supplies & IT",
-  "Raw Materials",
-  "Construction & Hardware",
-  "Logistics & Packaging",
-  "Electrical & Electronics",
-  "Safety & Maintenance",
-];
-
-function toDatetimeLocalValue(isoString: string): string {
-  try {
-    const d = new Date(isoString);
-    const pad = (n: number) => n.toString().padStart(2, "0");
-    const yyyy = d.getFullYear();
-    const mm = pad(d.getMonth() + 1);
-    const dd = pad(d.getDate());
-    const hh = pad(d.getHours());
-    const min = pad(d.getMinutes());
-    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
-  } catch {
-    return "";
-  }
-}
-
 export default function RFQDetailPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const rfqId = resolvedParams.id;
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("tab");
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -98,7 +67,10 @@ export default function RFQDetailPage({ params }: PageProps) {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"details" | "comparison" | "history">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "comparison" | "history">(() => {
+    if (urlTab === "comparison" || urlTab === "history") return urlTab;
+    return "details";
+  });
 
   // Vendor Action Modals
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
@@ -111,15 +83,6 @@ export default function RFQDetailPage({ params }: PageProps) {
 
   // Edit RFQ Modal (Buyer - Draft State)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editTitle, setEditTitle] = useState("");
-  const [editCategory, setEditCategory] = useState("");
-  const [editDeliveryLocation, setEditDeliveryLocation] = useState("");
-  const [editBudget, setEditBudget] = useState("");
-  const [editDeadline, setEditDeadline] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editAttachment, setEditAttachment] = useState<ParsedAttachment | null>(null);
-  const [editLineItems, setEditLineItems] = useState<RFQLineItemCreate[]>([]);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Quote form state (for vendors)
   const [quoteDeliveryDays, setQuoteDeliveryDays] = useState<number>(7);
@@ -206,109 +169,6 @@ export default function RFQDetailPage({ params }: PageProps) {
       ignore = true;
     };
   }, [rfqId, user, dataVersion]);
-
-  // Open Edit RFQ Modal and pre-populate form
-  const handleOpenEditModal = () => {
-    if (!rfq) return;
-    const parsed = parseDescriptionAndAttachment(rfq.description);
-
-    setEditTitle(rfq.title);
-    setEditCategory(rfq.category);
-    setEditDeliveryLocation(rfq.delivery_location);
-    setEditBudget(rfq.budget !== null && rfq.budget !== undefined ? String(rfq.budget) : "");
-    setEditDeadline(toDatetimeLocalValue(rfq.deadline));
-    setEditDescription(parsed.cleanDescription);
-    setEditAttachment(parsed.attachment);
-    setEditLineItems(
-      rfq.line_items.map((it) => ({
-        name: it.name,
-        quantity: Number(it.quantity),
-        unit: it.unit,
-      }))
-    );
-    setIsEditModalOpen(true);
-  };
-
-  // Save RFQ Edits (Buyer - Draft State)
-  const handleSaveRFQEdit = async () => {
-    if (!rfq) return;
-
-    if (!editTitle.trim()) {
-      toast({ title: "Validation Error", description: "Title is required.", variant: "destructive" });
-      return;
-    }
-    if (!editCategory.trim()) {
-      toast({ title: "Validation Error", description: "Category is required.", variant: "destructive" });
-      return;
-    }
-    if (!editDeliveryLocation.trim()) {
-      toast({ title: "Validation Error", description: "Delivery location is required.", variant: "destructive" });
-      return;
-    }
-    if (!editDeadline) {
-      toast({ title: "Validation Error", description: "Deadline is required.", variant: "destructive" });
-      return;
-    }
-
-    const deadlineDate = new Date(editDeadline);
-    if (deadlineDate.getTime() <= Date.now()) {
-      toast({ title: "Validation Error", description: "Deadline must be a future date and time.", variant: "destructive" });
-      return;
-    }
-
-    if (editLineItems.length === 0) {
-      toast({ title: "Validation Error", description: "At least one line item is required.", variant: "destructive" });
-      return;
-    }
-
-    for (const item of editLineItems) {
-      if (!item.name.trim()) {
-        toast({ title: "Validation Error", description: "Each line item must have a name/description.", variant: "destructive" });
-        return;
-      }
-      if (Number(item.quantity) <= 0) {
-        toast({ title: "Validation Error", description: "Line item quantities must be greater than 0.", variant: "destructive" });
-        return;
-      }
-    }
-
-    setIsSavingEdit(true);
-    try {
-      const fullDescription = formatDescriptionWithAttachment(
-        editDescription,
-        editAttachment ? { name: editAttachment.name, url: editAttachment.url } : null
-      );
-
-      const payload = {
-        title: editTitle.trim(),
-        description: fullDescription || undefined,
-        category: editCategory.trim(),
-        delivery_location: editDeliveryLocation.trim(),
-        budget: editBudget ? parseFloat(editBudget) : undefined,
-        deadline: deadlineDate.toISOString(),
-        line_items: editLineItems.map((it) => ({
-          name: it.name.trim(),
-          quantity: Number(it.quantity),
-          unit: it.unit.trim() || "units",
-        })),
-      };
-
-      const res = await rfqApi.update(rfq.id, payload);
-      setRfq(res.data);
-      setIsEditModalOpen(false);
-      toast({
-        title: "RFQ Updated",
-        description: "Your draft RFQ specifications have been saved successfully.",
-        variant: "success",
-      });
-      refreshData();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to update RFQ";
-      toast({ title: "Update Failed", description: msg, variant: "destructive" });
-    } finally {
-      setIsSavingEdit(false);
-    }
-  };
 
   // Publish Draft RFQ
   const handlePublish = async () => {
@@ -532,7 +392,7 @@ export default function RFQDetailPage({ params }: PageProps) {
               <>
                 <button
                   type="button"
-                  onClick={handleOpenEditModal}
+                  onClick={() => setIsEditModalOpen(true)}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 hover:text-white transition-all shadow-sm"
                 >
                   <Pencil className="h-3.5 w-3.5 text-indigo-400" />
@@ -599,7 +459,7 @@ export default function RFQDetailPage({ params }: PageProps) {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
-                onClick={handleOpenEditModal}
+                onClick={() => setIsEditModalOpen(true)}
                 className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/20 transition-colors"
               >
                 Edit RFQ
@@ -847,7 +707,7 @@ export default function RFQDetailPage({ params }: PageProps) {
               {isOwner && rfq.status === "draft" && (
                 <button
                   type="button"
-                  onClick={handleOpenEditModal}
+                  onClick={() => setIsEditModalOpen(true)}
                   className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-medium"
                 >
                   <Pencil className="h-3 w-3" />
@@ -1029,291 +889,70 @@ export default function RFQDetailPage({ params }: PageProps) {
               </p>
             ) : (
               <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-zinc-800">
-                {history.map((h) => (
-                  <div key={h.id} className="relative">
-                    <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-zinc-900 bg-indigo-500 ring-2 ring-indigo-500/20" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white capitalize">
-                          Transition to {h.to_status}
-                        </span>
-                        {h.from_status && (
-                          <span className="text-[11px] text-zinc-500">
-                            (from {h.from_status})
+                {history.map((h) => {
+                  const statusColors: Record<string, { dot: string; badge: string }> = {
+                    draft: { dot: "bg-amber-400 ring-amber-400/20", badge: "bg-amber-500/10 text-amber-300 border-amber-500/20" },
+                    published: { dot: "bg-indigo-400 ring-indigo-400/20", badge: "bg-indigo-500/10 text-indigo-300 border-indigo-500/20" },
+                    awarded: { dot: "bg-emerald-400 ring-emerald-400/20", badge: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20" },
+                    closed: { dot: "bg-rose-400 ring-rose-400/20", badge: "bg-rose-500/10 text-rose-300 border-rose-500/20" },
+                  };
+                  const color = statusColors[h.to_status.toLowerCase()] || {
+                    dot: "bg-zinc-400 ring-zinc-400/20",
+                    badge: "bg-zinc-800 text-zinc-300 border-zinc-700",
+                  };
+
+                  return (
+                    <div key={h.id} className="relative">
+                      <div className={`absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-zinc-950 ring-2 ${color.dot}`} />
+                      <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`rounded-md border px-2 py-0.5 text-xs font-bold uppercase tracking-wider ${color.badge}`}>
+                              {h.to_status}
+                            </span>
+                            {h.from_status && (
+                              <span className="text-[11px] text-zinc-400">
+                                Previous: <span className="font-semibold text-zinc-300">{h.from_status}</span>
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] font-mono text-zinc-400">
+                            {new Date(h.created_at).toLocaleString()}
                           </span>
+                        </div>
+
+                        {h.changed_by_name && (
+                          <div className="text-xs text-zinc-400">
+                            Authorized by: <span className="text-zinc-200 font-medium">{h.changed_by_name}</span>
+                          </div>
+                        )}
+
+                        {h.notes && (
+                          <p className="text-xs text-zinc-300 bg-zinc-900/60 rounded-lg p-2.5 border border-zinc-800/50 italic">
+                            &ldquo;{h.notes}&rdquo;
+                          </p>
                         )}
                       </div>
-                      <div className="text-[11px] text-zinc-400 mt-0.5">
-                        {new Date(h.created_at).toLocaleString()}
-                        {h.changed_by_name && ` by ${h.changed_by_name}`}
-                      </div>
-                      {h.notes && (
-                        <p className="mt-1 text-xs text-zinc-300 italic">
-                          &ldquo;{h.notes}&rdquo;
-                        </p>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         )}
 
         {/* Edit RFQ Modal (Buyer - Draft State) */}
-        <Modal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          title="Edit Draft RFQ"
-          description="Update RFQ specifications, procurement timeline, line items, and attachments before publishing."
-          maxWidth="2xl"
-        >
-          <div className="space-y-5 max-h-[75vh] overflow-y-auto pr-1">
-            {/* Title */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                RFQ Title *
-              </label>
-              <input
-                type="text"
-                required
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="e.g. IT Equipment for Bangalore Site"
-                className="mt-1.5 block w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-
-            {/* Category & Location */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Category *
-                </label>
-                <select
-                  value={editCategory}
-                  onChange={(e) => setEditCategory(e.target.value)}
-                  className="mt-1.5 block w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
-                >
-                  {Array.from(new Set([editCategory, ...DEFAULT_CATEGORIES])).filter(Boolean).map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Delivery Location *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editDeliveryLocation}
-                  onChange={(e) => setEditDeliveryLocation(e.target.value)}
-                  placeholder="e.g. Bangalore, Site 4"
-                  className="mt-1.5 block w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Budget & Deadline */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Estimated Budget (USD)
-                </label>
-                <div className="relative mt-1.5">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-xs">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={editBudget}
-                    onChange={(e) => setEditBudget(e.target.value)}
-                    placeholder="Optional budget"
-                    className="block w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2 pl-7 pr-3 text-xs text-white placeholder-zinc-600 focus:border-indigo-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Submission Deadline *
-                </label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={editDeadline}
-                  onChange={(e) => setEditDeadline(e.target.value)}
-                  className="mt-1.5 block w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Description / Scope */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                Scope / Requirements Description
-              </label>
-              <textarea
-                rows={3}
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                placeholder="Describe procurement requirements, warranty needs, delivery terms..."
-                className="mt-1.5 block w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-
-            {/* Attachment Management */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                Specification Document / Attachment
-              </label>
-
-              {editAttachment ? (
-                <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-xs">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Paperclip className="h-4 w-4 text-indigo-400 shrink-0" />
-                    <span className="text-white font-medium truncate">{editAttachment.name}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setEditAttachment(null)}
-                    className="text-xs text-rose-400 hover:text-rose-300 font-medium shrink-0 ml-3"
-                  >
-                    Remove File
-                  </button>
-                </div>
-              ) : (
-                <FileUpload
-                  folder="rfq_attachments"
-                  label="Upload New Specification Document"
-                  onUploaded={(asset) => {
-                    if (asset.url) {
-                      setEditAttachment({
-                        name: asset.filename,
-                        url: asset.url,
-                        extension: asset.filename.split(".").pop()?.toUpperCase() || "FILE",
-                      });
-                    }
-                  }}
-                  onRemoved={() => setEditAttachment(null)}
-                />
-              )}
-            </div>
-
-            {/* Line Items Editor */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Line Items ({editLineItems.length}) *
-                </label>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setEditLineItems((prev) => [...prev, { name: "", quantity: 1, unit: "units" }])
-                  }
-                  className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-medium"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Add Line Item</span>
-                </button>
-              </div>
-
-              <div className="space-y-2.5">
-                {editLineItems.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex flex-col sm:flex-row items-center gap-2 rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-2.5 text-xs"
-                  >
-                    <input
-                      type="text"
-                      placeholder="Item name / specification"
-                      required
-                      value={item.name}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditLineItems((prev) =>
-                          prev.map((it, i) => (i === idx ? { ...it, name: val } : it))
-                        );
-                      }}
-                      className="flex-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
-                    />
-
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Qty"
-                        required
-                        value={item.quantity}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 1;
-                          setEditLineItems((prev) =>
-                            prev.map((it, i) => (i === idx ? { ...it, quantity: val } : it))
-                          );
-                        }}
-                        className="w-20 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
-                      />
-
-                      <input
-                        type="text"
-                        placeholder="Unit (e.g. units)"
-                        required
-                        value={item.unit}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditLineItems((prev) =>
-                            prev.map((it, i) => (i === idx ? { ...it, unit: val } : it))
-                          );
-                        }}
-                        className="w-24 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
-                      />
-
-                      <button
-                        type="button"
-                        disabled={editLineItems.length <= 1}
-                        onClick={() =>
-                          setEditLineItems((prev) => prev.filter((_, i) => i !== idx))
-                        }
-                        className="p-1.5 text-zinc-500 hover:text-rose-400 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Remove line item"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
-              <button
-                type="button"
-                onClick={() => setIsEditModalOpen(false)}
-                className="rounded-xl border border-zinc-800 px-4 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isSavingEdit}
-                onClick={handleSaveRFQEdit}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-lg hover:bg-indigo-500 disabled:opacity-50"
-              >
-                {isSavingEdit ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Save className="h-3.5 w-3.5" />
-                )}
-                <span>Save Changes</span>
-              </button>
-            </div>
-          </div>
-        </Modal>
+        {isEditModalOpen && rfq && (
+          <EditRFQModal
+            isOpen={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            rfq={rfq}
+            onSaved={(updated) => {
+              setRfq(updated);
+              refreshData();
+            }}
+          />
+        )}
 
         {/* Submit / Revise Quote Modal (Vendor) */}
         <Modal

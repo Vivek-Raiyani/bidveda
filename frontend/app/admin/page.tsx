@@ -68,7 +68,7 @@ function AdminDashboardContent() {
   const { user: currentAdmin } = useAuth();
   const { toast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<"users" | "rfqs" | "security">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "rfqs">("users");
 
   // User list state
   const [users, setUsers] = useState<User[]>([]);
@@ -85,6 +85,8 @@ function AdminDashboardContent() {
   const [rfqsLoading, setRfqsLoading] = useState(false);
   const [rfqSearch, setRfqSearch] = useState("");
   const [rfqStatusFilter, setRfqStatusFilter] = useState<RFQStatus | "">("");
+  const [rfqPage, setRfqPage] = useState(1);
+  const [rfqTotalPages, setRfqTotalPages] = useState(1);
   const [rfqTotalItems, setRfqTotalItems] = useState(0);
 
   // Modals state
@@ -146,13 +148,14 @@ function AdminDashboardContent() {
     setRfqsLoading(true);
     try {
       const res = await rfqApi.list({
-        page: 1,
-        limit: 20,
+        page: rfqPage,
+        limit: 10,
         q: rfqSearch.trim() || undefined,
         status: rfqStatusFilter || undefined,
       });
       setRfqs(res.data || []);
       if (res.pagination) {
+        setRfqTotalPages(res.pagination.total_pages || 1);
         setRfqTotalItems(res.pagination.total_items || 0);
       }
     } catch (err: unknown) {
@@ -161,17 +164,33 @@ function AdminDashboardContent() {
     } finally {
       setRfqsLoading(false);
     }
-  }, [rfqSearch, rfqStatusFilter, toast]);
+  }, [rfqPage, rfqSearch, rfqStatusFilter, toast]);
 
   useEffect(() => {
-    loadUsers();
+    let ignore = false;
+    async function fetchUsers() {
+      await loadUsers();
+    }
+    if (!ignore) {
+      fetchUsers();
+    }
+    return () => {
+      ignore = true;
+    };
   }, [loadUsers]);
 
   useEffect(() => {
-    if (activeTab === "rfqs") {
-      loadRFQs();
+    let ignore = false;
+    async function fetchRFQs() {
+      await loadRFQs();
     }
-  }, [activeTab, loadRFQs]);
+    if (!ignore) {
+      fetchRFQs();
+    }
+    return () => {
+      ignore = true;
+    };
+  }, [loadRFQs]);
 
   // Handle User Creation
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -377,7 +396,7 @@ function AdminDashboardContent() {
               <FileText className="h-4 w-4 text-sky-400" />
             </div>
             <div className="text-3xl font-extrabold text-white">
-              {rfqTotalItems || "—"}
+              {rfqsLoading && rfqTotalItems === 0 ? "..." : rfqTotalItems}
             </div>
             <div className="mt-2 text-xs text-zinc-400 flex items-center gap-2">
               <span className="text-sky-400 font-semibold">Procurement Pipeline</span>
@@ -425,18 +444,7 @@ function AdminDashboardContent() {
             }`}
           >
             <Layers className="h-4 w-4" />
-            <span>RFQ Oversight</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("security")}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-all ${
-              activeTab === "security"
-                ? "border-indigo-500 text-white"
-                : "border-transparent text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <Lock className="h-4 w-4" />
-            <span>RBAC Policy Matrix</span>
+            <span>RFQ Oversight ({rfqTotalItems})</span>
           </button>
         </div>
 
@@ -792,7 +800,7 @@ function AdminDashboardContent() {
                                 <ExternalLink className="h-3 w-3" />
                               </Link>
                               <Link
-                                href={`/rfqs/${rfq.id}/compare`}
+                                href={`/rfqs/${rfq.id}?tab=comparison`}
                                 className="flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors ml-2"
                               >
                                 <span>Matrix</span>
@@ -806,67 +814,33 @@ function AdminDashboardContent() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* Tab 3: Security & RBAC Policy Matrix */}
-        {activeTab === "security" && (
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-                <Lock className="h-5 w-5 text-indigo-400" />
-                <span>Role-Based Access Control (RBAC) Governance Matrix</span>
-              </h2>
-              <p className="text-sm text-zinc-400 mb-6">
-                BidVeda enforces strict privilege isolation across buyer, vendor, and administrator roles.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-5">
-                  <div className="flex items-center gap-2 font-bold text-sky-400 text-sm mb-3">
-                    <span className="h-2 w-2 rounded-full bg-sky-400" />
-                    <span>Buyer Role</span>
+              {/* RFQ Oversight Pagination */}
+              {rfqTotalPages > 1 && (
+                <div className="flex items-center justify-between border-t border-zinc-800 px-4 py-3 bg-zinc-950/40 text-xs text-zinc-400">
+                  <div>
+                    Page <span className="font-semibold text-white">{rfqPage}</span> of{" "}
+                    <span className="font-semibold text-white">{rfqTotalPages}</span> (
+                    {rfqTotalItems} RFQs)
                   </div>
-                  <ul className="text-xs text-zinc-300 space-y-2 leading-relaxed">
-                    <li>• Create, edit, and publish draft RFQs</li>
-                    <li>• Scope limited strictly to own created RFQs</li>
-                    <li>• Compare competitive bids side-by-side</li>
-                    <li>• Award contract to winning vendor</li>
-                    <li>• <strong>Restricted:</strong> Cannot submit quotes</li>
-                    <li>• <strong>Restricted:</strong> Cannot access user administration</li>
-                  </ul>
-                </div>
-
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-5">
-                  <div className="flex items-center gap-2 font-bold text-purple-400 text-sm mb-3">
-                    <span className="h-2 w-2 rounded-full bg-purple-400" />
-                    <span>Vendor Role</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setRfqPage((p) => Math.max(1, p - 1))}
+                      disabled={rfqPage <= 1}
+                      className="rounded-lg border border-zinc-800 p-1.5 text-zinc-300 disabled:opacity-30 hover:bg-zinc-800"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setRfqPage((p) => Math.min(rfqTotalPages, p + 1))}
+                      disabled={rfqPage >= rfqTotalPages}
+                      className="rounded-lg border border-zinc-800 p-1.5 text-zinc-300 disabled:opacity-30 hover:bg-zinc-800"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
                   </div>
-                  <ul className="text-xs text-zinc-300 space-y-2 leading-relaxed">
-                    <li>• Browse published marketplace RFQs</li>
-                    <li>• Submit granular line-item quotes before deadline</li>
-                    <li>• Revise quotes prior to deadline cutoff</li>
-                    <li>• Isolated portfolio for own submitted quotes</li>
-                    <li>• <strong>Sealed Bidding:</strong> Cannot view competitors bids</li>
-                    <li>• <strong>Restricted:</strong> Cannot create or award RFQs</li>
-                  </ul>
                 </div>
-
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-5 border-rose-500/20">
-                  <div className="flex items-center gap-2 font-bold text-rose-400 text-sm mb-3">
-                    <span className="h-2 w-2 rounded-full bg-rose-400 animate-pulse" />
-                    <span>Admin Role (Unrestricted)</span>
-                  </div>
-                  <ul className="text-xs text-zinc-300 space-y-2 leading-relaxed">
-                    <li>• Full control over users: create, edit, ban, delete</li>
-                    <li>• Global oversight across all RFQs and quotes</li>
-                    <li>• Complete audit trail & status transition logs</li>
-                    <li>• Security self-safeguards against accidental demotion</li>
-                    <li>• Immutable token validation via HttpOnly cookies</li>
-                  </ul>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         )}

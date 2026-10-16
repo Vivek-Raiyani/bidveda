@@ -27,18 +27,20 @@ function RFQListContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
 
-  const tabParam = searchParams.get("tab") || "all";
-  const [activeTab, setActiveTab] = useState<"all" | "my">(
-    tabParam === "my" ? "my" : "all"
-  );
+  const isBuyer = user?.role === UserRole.BUYER;
+  const isVendor = user?.role === UserRole.VENDOR;
+  const isBuyerOrAdmin = isBuyer || user?.role === UserRole.ADMIN;
 
-  useEffect(() => {
-    if (tabParam === "my") {
-      setActiveTab("my");
-    } else if (tabParam === "all") {
-      setActiveTab("all");
-    }
-  }, [tabParam]);
+  const tabParam = searchParams.get("tab");
+  const activeTab: "all" | "my" = isVendor
+    ? "all"
+    : tabParam === "my"
+    ? "my"
+    : tabParam === "all"
+    ? "all"
+    : isBuyer
+    ? "my"
+    : "all";
 
   const [rfqs, setRfqs] = useState<RFQListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,12 +52,10 @@ function RFQListContent() {
   const [category, setCategory] = useState("");
   const [deliveryLocation, setDeliveryLocation] = useState("");
   const [statusFilter, setStatusFilter] = useState<RFQStatus | "">("");
+  const [closingSoonOnly, setClosingSoonOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-
-  const isBuyerOrAdmin =
-    user?.role === UserRole.BUYER || user?.role === UserRole.ADMIN;
 
   const [searchTrigger, setSearchTrigger] = useState(0);
 
@@ -114,7 +114,6 @@ function RFQListContent() {
   ]);
 
   const handleTabChange = (tab: "all" | "my") => {
-    setActiveTab(tab);
     setPage(1);
     router.replace(`/rfqs?tab=${tab}`);
   };
@@ -130,6 +129,7 @@ function RFQListContent() {
     setCategory("");
     setDeliveryLocation("");
     setStatusFilter("");
+    setClosingSoonOnly(false);
     setPage(1);
   };
 
@@ -143,6 +143,12 @@ function RFQListContent() {
     "Safety & Maintenance",
   ];
 
+  const displayedRfqs = rfqs.filter((r) => {
+    if (!closingSoonOnly) return true;
+    const d = new Date(r.deadline).getTime();
+    return d >= now && d <= now + 7 * 24 * 60 * 60 * 1000;
+  });
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <Navbar />
@@ -153,14 +159,22 @@ function RFQListContent() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                RFQ Marketplace
+                {isVendor
+                  ? "Browse RFQ Marketplace"
+                  : activeTab === "my"
+                  ? "My Sourcing Requests"
+                  : "All RFQ Opportunities"}
               </h1>
               <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 text-xs font-semibold text-indigo-400">
                 {totalItems} Requests
               </span>
             </div>
             <p className="mt-1 text-sm text-zinc-400">
-              Browse enterprise procurement opportunities, submit competitive quotes, or track your sourcing.
+              {isVendor
+                ? "Explore verified procurement opportunities across industries and submit sealed quotations."
+                : activeTab === "my"
+                ? "Review your team's draft and active requests, evaluate submitted quotes, and award contracts."
+                : "Browse marketplace procurement requests across all enterprise organizations."}
             </p>
           </div>
 
@@ -226,7 +240,7 @@ function RFQListContent() {
           </div>
 
           {/* Extended Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/40">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/40">
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
                 Category
@@ -284,6 +298,23 @@ function RFQListContent() {
               </select>
             </div>
 
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
+                Deadline Urgency
+              </label>
+              <button
+                type="button"
+                onClick={() => setClosingSoonOnly(!closingSoonOnly)}
+                className={`w-full rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  closingSoonOnly
+                    ? "border-amber-500/50 bg-amber-500/15 text-amber-300"
+                    : "border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white"
+                }`}
+              >
+                {closingSoonOnly ? "⚡ Closing < 7 Days" : "All Deadlines"}
+              </button>
+            </div>
+
             <div className="flex items-end">
               <button
                 type="button"
@@ -324,7 +355,7 @@ function RFQListContent() {
                 </div>
               ))}
             </div>
-          ) : rfqs.length === 0 ? (
+          ) : displayedRfqs.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/20 p-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-400 ring-1 ring-indigo-500/20">
                 <FileText className="h-7 w-7" />
@@ -333,7 +364,9 @@ function RFQListContent() {
                 No RFQs found
               </h3>
               <p className="mt-1 max-w-sm text-sm text-zinc-400">
-                {activeTab === "my"
+                {closingSoonOnly
+                  ? "No open RFQs closing within the next 7 days."
+                  : activeTab === "my"
                   ? "You haven't created any RFQs yet. Draft your first request for quotation."
                   : "No procurement requests match your current search criteria."}
               </p>
@@ -349,7 +382,7 @@ function RFQListContent() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {rfqs.map((rfq) => {
+              {displayedRfqs.map((rfq) => {
                 const deadlineDate = new Date(rfq.deadline);
                 const isExpired = deadlineDate.getTime() < now;
 
@@ -366,11 +399,6 @@ function RFQListContent() {
                           {rfq.category}
                         </span>
                         <div className="flex items-center gap-1.5">
-                          {rfq.status === "draft" && (
-                            <span className="rounded-md bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-                              Draft
-                            </span>
-                          )}
                           <RFQStatusBadge status={rfq.status} />
                         </div>
                       </div>
