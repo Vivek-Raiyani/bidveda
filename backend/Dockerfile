@@ -22,10 +22,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy backend source code
 COPY . .
 
-EXPOSE 8000
+EXPOSE 8002
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
+    CMD curl -f http://localhost:8002/ || exit 1
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
+
 
