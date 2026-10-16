@@ -1,0 +1,47 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bidveda-backend
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    environment:
+      - PORT=8002
+      - BACKEND_CORS_ORIGINS=["http://localhost:3003","http://127.0.0.1:3003","http://localhost:3000"]
+      - FRONTEND_URL=http://localhost:3003
+    volumes:
+      - backend_media:/app/media
+    networks:
+      - bidveda-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8002/api
+    container_name: bidveda-frontend
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - NEXT_PUBLIC_API_URL=http://localhost:8002/api
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - bidveda-network
+
+volumes:
+  backend_media:
+    name: bidveda_media_data
+
+networks:
+  bidveda-network:
+    name: bidveda_network
+    driver: bridge
