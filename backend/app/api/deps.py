@@ -21,7 +21,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db
 
 def _extract_token_from_cookie(request: Request) -> str:
-    """Extract and validate the raw JWT string from the access_token cookie."""
+    """Extract and validate the raw JWT string from Authorization header or access_token cookie."""
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header[len("Bearer "):]
+
     cookie_value = request.cookies.get("access_token")
     if not cookie_value:
         raise HTTPException(

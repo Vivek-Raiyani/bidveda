@@ -20,15 +20,23 @@ app = FastAPI(
     openapi_url="/api/openapi.json"
 )
 
+# Build list of allowed origins
+cors_origins = [str(o).strip().rstrip("/") for o in settings.BACKEND_CORS_ORIGINS if str(o).strip()]
+if settings.FRONTEND_URL:
+    clean_frontend = settings.FRONTEND_URL.strip().rstrip("/")
+    if clean_frontend and clean_frontend not in cors_origins:
+        cors_origins.append(clean_frontend)
+
 # Required by Authlib for Starlette
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)  # ✅ Required by Authlib for Google OAuth state/nonce
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,  # ⚠️ See note below
-    allow_credentials=True,  # ✅ Critical — allows cookies to be sent cross-origin
-    allow_methods=["*"],     # ✅ Fine
-    allow_headers=["*"],     # ✅ Fine
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https?://.*",  # Dynamically permits all HTTP/HTTPS origins with credential support
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

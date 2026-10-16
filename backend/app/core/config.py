@@ -16,12 +16,20 @@ class Settings(BaseSettings):
     def assemble_cors_origins(cls, v: Any) -> list[str]:
         if isinstance(v, str):
             v_trimmed = v.strip()
+            # Strip outer quotes if enclosed in single or double quotes
+            if (v_trimmed.startswith("'") and v_trimmed.endswith("'")) or \
+               (v_trimmed.startswith('"') and v_trimmed.endswith('"')):
+                v_trimmed = v_trimmed[1:-1].strip()
             if v_trimmed.startswith("[") and v_trimmed.endswith("]"):
                 try:
-                    return json.loads(v_trimmed)
+                    parsed = json.loads(v_trimmed)
+                    if isinstance(parsed, list):
+                        return [str(i).strip().rstrip("/") for i in parsed if str(i).strip()]
                 except Exception:
                     pass
-            return [i.strip() for i in v_trimmed.split(",") if i.strip()]
+            return [i.strip().strip("'\"").rstrip("/") for i in v_trimmed.split(",") if i.strip()]
+        if isinstance(v, list):
+            return [str(i).strip().rstrip("/") for i in v if str(i).strip()]
         return v
 
     # Auth Settings

@@ -71,13 +71,15 @@ async def signin(
     access_token = create_access_token({"sub": str(user.id), "role": user.role}, expires_delta=access_token_expires)
     refresh_token = create_refresh_token({"sub": str(user.id), "role": user.role})
     
+    cookie_samesite = "none" if settings.COOKIE_SECURE else "lax"
+    
     # Set access token as HTTP-only cookie (short-lived)
     response.set_cookie(
         key="access_token",
         value=f"Bearer {access_token}",
         httponly=True,
         secure=settings.COOKIE_SECURE,  # True in production (HTTPS)
-        samesite="lax",
+        samesite=cookie_samesite,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
     # Set refresh token as HTTP-only cookie (long-lived)
@@ -86,7 +88,7 @@ async def signin(
         value=refresh_token,
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite="lax",
+        samesite=cookie_samesite,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
     )
     return MessageResponse(message="Successfully logged in")
@@ -105,8 +107,9 @@ async def signout(response: Response, current_user: User = Depends(deps.get_curr
     logging out the user. The frontend cannot do this itself since the cookies
     are HTTP-only and inaccessible to JavaScript.
     """
-    response.delete_cookie(key="access_token", httponly=True, samesite="lax")
-    response.delete_cookie(key="refresh_token", httponly=True, samesite="lax")
+    cookie_samesite = "none" if settings.COOKIE_SECURE else "lax"
+    response.delete_cookie(key="access_token", httponly=True, samesite=cookie_samesite)
+    response.delete_cookie(key="refresh_token", httponly=True, samesite=cookie_samesite)
     return MessageResponse(message="Successfully logged out.")
 
 @router.post("/refresh", response_model=MessageResponse)
@@ -141,13 +144,15 @@ async def refresh_token(
     new_access_token = create_access_token({"sub": str(user.id), "role": user.role}, expires_delta=access_token_expires)
     new_refresh_token = create_refresh_token({"sub": str(user.id), "role": user.role})
     
+    cookie_samesite = "none" if settings.COOKIE_SECURE else "lax"
+
     # Rotate both cookies
     response.set_cookie(
         key="access_token",
         value=f"Bearer {new_access_token}",
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite="lax",
+        samesite=cookie_samesite,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
     response.set_cookie(
@@ -155,7 +160,7 @@ async def refresh_token(
         value=new_refresh_token,
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite="lax",
+        samesite=cookie_samesite,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
     )
     return MessageResponse(message="Tokens refreshed successfully")
