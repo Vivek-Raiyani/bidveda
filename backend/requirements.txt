@@ -15,3 +15,5 @@ httpx
 aiosmtplib
 xlsxwriter
 python-dotenv
+asyncpg
+psycopg2-binary

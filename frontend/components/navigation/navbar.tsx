@@ -35,7 +35,7 @@ export function Navbar() {
       name: "Marketplace",
       href: "/rfqs",
       icon: Briefcase,
-      show: true,
+      show: isVendorOrAdmin,
     },
     {
       name: "My RFQs",
@@ -214,6 +214,40 @@ export function Navbar() {
               <span>Create RFQ</span>
             </Link>
           )}
+
+          <div className="pt-2 border-t border-zinc-850">
+            {isAuthenticated ? (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  logout();
+                }}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-rose-400 hover:bg-rose-500/10 transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign out</span>
+              </button>
+            ) : (
+              <div className="flex flex-col gap-2 pt-1">
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-zinc-800 py-2.5 text-sm font-medium text-zinc-200 hover:bg-zinc-900"
+                >
+                  <LogIn className="h-4 w-4" />
+                  <span>Sign in</span>
+                </Link>
+                <Link
+                  href="/register"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-indigo-500"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  <span>Register</span>
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </header>

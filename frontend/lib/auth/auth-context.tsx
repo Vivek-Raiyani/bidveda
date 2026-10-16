@@ -7,6 +7,7 @@ import React, {
   useState,
   useCallback,
 } from "react";
+import { useRouter } from "next/navigation";
 import {
   User,
   UserLoginInput,
@@ -18,6 +19,7 @@ import { authApi } from "@/lib/api/auth";
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -95,6 +97,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setUser(null);
       setIsLoading(false);
+      router.push("/");
+      router.refresh();
     }
   };
 

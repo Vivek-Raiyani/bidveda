@@ -1,8 +1,8 @@
-"""initial_migration
+"""empty message
 
-Revision ID: e7c4c2143388
+Revision ID: 78709a1aa45e
 Revises: 
-Create Date: 2026-10-15 16:05:08.298971
+Create Date: 2026-10-16 21:03:53.190799
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'e7c4c2143388'
+revision: str = '78709a1aa45e'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -39,6 +39,26 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_users_email'), ['email'], unique=True)
         batch_op.create_index(batch_op.f('ix_users_id'), ['id'], unique=False)
         batch_op.create_index(batch_op.f('ix_users_is_deleted'), ['is_deleted'], unique=False)
+
+    op.create_table('assets',
+    sa.Column('uploaded_by', sa.UUID(), nullable=False),
+    sa.Column('folder', sa.String(), nullable=False),
+    sa.Column('filename', sa.String(), nullable=False),
+    sa.Column('storage_key', sa.String(), nullable=False),
+    sa.Column('file_url', sa.String(), nullable=True),
+    sa.Column('content_type', sa.String(), nullable=True),
+    sa.Column('file_size', sa.Integer(), nullable=True),
+    sa.Column('status', sa.String(), nullable=False),
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['uploaded_by'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('storage_key')
+    )
+    with op.batch_alter_table('assets', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_assets_id'), ['id'], unique=False)
+        batch_op.create_index(batch_op.f('ix_assets_uploaded_by'), ['uploaded_by'], unique=False)
 
     op.create_table('rfqs',
     sa.Column('buyer_id', sa.UUID(), nullable=False),
@@ -67,7 +87,25 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_rfqs_status'), ['status'], unique=False)
         batch_op.create_index(batch_op.f('ix_rfqs_title'), ['title'], unique=False)
 
-    
+    op.create_table('status_histories',
+    sa.Column('entity_type', sa.String(length=50), nullable=False),
+    sa.Column('entity_id', sa.UUID(), nullable=False),
+    sa.Column('from_status', sa.String(length=50), nullable=True),
+    sa.Column('to_status', sa.String(length=50), nullable=False),
+    sa.Column('changed_by_id', sa.UUID(), nullable=True),
+    sa.Column('notes', sa.Text(), nullable=True),
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['changed_by_id'], ['users.id'], ondelete='SET NULL'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    with op.batch_alter_table('status_histories', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_status_histories_changed_by_id'), ['changed_by_id'], unique=False)
+        batch_op.create_index(batch_op.f('ix_status_histories_entity_id'), ['entity_id'], unique=False)
+        batch_op.create_index(batch_op.f('ix_status_histories_entity_type'), ['entity_type'], unique=False)
+        batch_op.create_index(batch_op.f('ix_status_histories_id'), ['id'], unique=False)
+
     op.create_table('quotes',
     sa.Column('rfq_id', sa.UUID(), nullable=False),
     sa.Column('vendor_id', sa.UUID(), nullable=False),
@@ -159,10 +197,27 @@ def downgrade() -> None:
         batch_op.drop_index(batch_op.f('ix_status_histories_entity_id'))
         batch_op.drop_index(batch_op.f('ix_status_histories_changed_by_id'))
 
+    op.drop_table('status_histories')
+    with op.batch_alter_table('rfqs', schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f('ix_rfqs_title'))
+        batch_op.drop_index(batch_op.f('ix_rfqs_status'))
+        batch_op.drop_index(batch_op.f('ix_rfqs_is_deleted'))
+        batch_op.drop_index(batch_op.f('ix_rfqs_id'))
+        batch_op.drop_index(batch_op.f('ix_rfqs_delivery_location'))
+        batch_op.drop_index(batch_op.f('ix_rfqs_deadline'))
+        batch_op.drop_index(batch_op.f('ix_rfqs_category'))
+        batch_op.drop_index(batch_op.f('ix_rfqs_buyer_id'))
+
     op.drop_table('rfqs')
     with op.batch_alter_table('assets', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_assets_uploaded_by'))
         batch_op.drop_index(batch_op.f('ix_assets_id'))
+
+    op.drop_table('assets')
+    with op.batch_alter_table('users', schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f('ix_users_is_deleted'))
+        batch_op.drop_index(batch_op.f('ix_users_id'))
+        batch_op.drop_index(batch_op.f('ix_users_email'))
 
     op.drop_table('users')
     # ### end Alembic commands ###

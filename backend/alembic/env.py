@@ -26,7 +26,9 @@ for _, module_name, _ in pkgutil.iter_modules(app.models.__path__):
 
 # Overwrite the alembic.ini URL with the one from our environment
 # Strip out async driver for sync alembic execution.
-sync_url = settings.DATABASE_URL.replace("+aiosqlite", "")
+sync_url = settings.DATABASE_URL.replace("+aiosqlite", "").replace("+asyncpg", "")
+if sync_url.startswith("postgres://"):
+    sync_url = sync_url.replace("postgres://", "postgresql://", 1)
 config.set_main_option("sqlalchemy.url", sync_url)
 
 target_metadata = Base.metadata

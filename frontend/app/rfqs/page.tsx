@@ -25,20 +25,19 @@ import {
 function RFQListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const isBuyer = user?.role === UserRole.BUYER;
   const isVendor = user?.role === UserRole.VENDOR;
-  const isBuyerOrAdmin = isBuyer || user?.role === UserRole.ADMIN;
+  const isAdmin = user?.role === UserRole.ADMIN;
+  const isBuyerOrAdmin = isBuyer || isAdmin;
 
   const tabParam = searchParams.get("tab");
-  const activeTab: "all" | "my" = isVendor
+  const activeTab: "all" | "my" = isBuyer
+    ? "my"
+    : isVendor
     ? "all"
     : tabParam === "my"
-    ? "my"
-    : tabParam === "all"
-    ? "all"
-    : isBuyer
     ? "my"
     : "all";
 
@@ -60,6 +59,12 @@ function RFQListContent() {
   const [searchTrigger, setSearchTrigger] = useState(0);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      router.push("/login?redirect=/rfqs");
+      return;
+    }
+
     let ignore = false;
     async function loadRFQs() {
       setError(null);
@@ -103,6 +108,9 @@ function RFQListContent() {
       ignore = true;
     };
   }, [
+    authLoading,
+    isAuthenticated,
+    router,
     activeTab,
     isBuyerOrAdmin,
     page,
@@ -194,19 +202,19 @@ function RFQListContent() {
         {/* Tab & Filter Bar */}
         <div className="mt-6 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            {/* Tabs */}
-            <div className="flex items-center p-1 rounded-xl bg-zinc-900 border border-zinc-800 w-fit">
-              <button
-                onClick={() => handleTabChange("all")}
-                className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                  activeTab === "all"
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-white"
-                }`}
-              >
-                All Opportunities
-              </button>
-              {isBuyerOrAdmin && (
+            {/* Tabs (Only relevant for Admin who can toggle between All Platform RFQs vs My RFQs) */}
+            {isAdmin && (
+              <div className="flex items-center p-1 rounded-xl bg-zinc-900 border border-zinc-800 w-fit">
+                <button
+                  onClick={() => handleTabChange("all")}
+                  className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                    activeTab === "all"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  All Platform RFQs
+                </button>
                 <button
                   onClick={() => handleTabChange("my")}
                   className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-all ${
@@ -217,8 +225,8 @@ function RFQListContent() {
                 >
                   My Sourcing Requests
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Quick search input */}
             <form onSubmit={handleSearchSubmit} className="relative flex-1 sm:max-w-md">
