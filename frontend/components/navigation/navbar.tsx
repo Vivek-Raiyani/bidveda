@@ -49,12 +49,12 @@ export function Navbar() {
       icon: Briefcase,
       show: isVendorOrAdmin,
     },
-    {
-      name: "Assets",
-      href: "/assets",
-      icon: FolderArchive,
-      show: isAuthenticated,
-    },
+    // {
+    //   name: "Assets",
+    //   href: "/assets",
+    //   icon: FolderArchive,
+    //   show: isAuthenticated,
+    // },
     {
       name: "Admin Hub",
       href: "/admin",

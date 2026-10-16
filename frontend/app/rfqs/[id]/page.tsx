@@ -8,6 +8,7 @@ import { rfqApi, quoteApi } from "@/lib/api";
 import { RFQ, StatusHistoryItem } from "@/types/rfq";
 import {
   Quote,
+  QuoteItem,
   RFQComparisonView,
   ComparisonQuoteColumn,
   QuoteItemCreate,
@@ -93,6 +94,11 @@ export default function RFQDetailPage({ params }: PageProps) {
   const isVendor = user?.role === UserRole.VENDOR;
   const isAdmin = user?.role === UserRole.ADMIN;
   const isOwner = user?.id === rfq?.buyer_id || isAdmin;
+
+  const myQuoteItemsMap = React.useMemo(() => {
+    if (!myQuote?.items) return new Map<string, QuoteItem>();
+    return new Map(myQuote.items.map((it) => [it.line_item_id, it]));
+  }, [myQuote]);
 
   const refreshData = () => setDataVersion((v) => v + 1);
 
@@ -612,7 +618,7 @@ export default function RFQDetailPage({ params }: PageProps) {
                 <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-zinc-300">
                   <span>
                     Total Amount:{" "}
-                    <strong className="text-white">
+                    <strong className="text-emerald-400 font-mono text-sm font-bold">
                       ${Number(myQuote.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </strong>
                   </span>
@@ -644,6 +650,34 @@ export default function RFQDetailPage({ params }: PageProps) {
                 </button>
               )}
             </div>
+
+            {/* Quick item breakdown tags inside banner */}
+            {myQuote.items && myQuote.items.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-indigo-500/20 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-indigo-300 mr-1">
+                  Item Breakdown:
+                </span>
+                {myQuote.items.map((qItem, i) => {
+                  const lineItem = rfq.line_items.find((li) => li.id === qItem.line_item_id);
+                  const name = lineItem?.name || qItem.line_item_name || `Item ${i + 1}`;
+                  const qty = lineItem?.quantity || qItem.quantity;
+                  const unit = lineItem?.unit || qItem.unit || "";
+                  return (
+                    <div
+                      key={qItem.id || i}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/25 bg-zinc-950/70 px-2.5 py-1 text-xs text-zinc-200"
+                    >
+                      <span className="font-medium text-white">{name}</span>
+                      {qty && <span className="text-zinc-400 text-[11px]">({qty} {unit})</span>}
+                      <span className="text-indigo-400">@</span>
+                      <span className="font-mono font-semibold text-emerald-400">
+                        ${Number(qItem.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -696,11 +730,22 @@ export default function RFQDetailPage({ params }: PageProps) {
           <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 overflow-hidden shadow-xl">
             <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-300">
-                  Required Bill of Materials & Quantities
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+                    {myQuote
+                      ? `Required Bill of Materials & Your Quoted Pricing (Version ${myQuote.version})`
+                      : "Required Bill of Materials & Quantities"}
+                  </h3>
+                  {myQuote && (
+                    <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+                      Your Quoted Rates Active
+                    </span>
+                  )}
+                </div>
                 <p className="text-[11px] text-zinc-500 mt-0.5">
-                  Items suppliers will bid against in their quotations.
+                  {myQuote
+                    ? "Detailed breakdown of the unit rates and extended subtotals you quoted for each line item."
+                    : "Items suppliers will bid against in their quotations."}
                 </p>
               </div>
 
@@ -724,20 +769,59 @@ export default function RFQDetailPage({ params }: PageProps) {
                     <th className="py-3 px-4">Item Description</th>
                     <th className="py-3 px-4 text-right">Quantity</th>
                     <th className="py-3 px-4">Unit of Measure</th>
+                    {myQuote && (
+                      <>
+                        <th className="py-3 px-4 text-right text-emerald-400">Your Quoted Unit Price</th>
+                        <th className="py-3 px-4 text-right text-emerald-400">Your Line Subtotal</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/80">
-                  {rfq.line_items.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-zinc-800/30 transition-colors">
-                      <td className="py-3 px-4 font-mono text-zinc-500">{idx + 1}</td>
-                      <td className="py-3 px-4 font-medium text-white">{item.name}</td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-zinc-200">
-                        {Number(item.quantity).toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-zinc-400">{item.unit}</td>
-                    </tr>
-                  ))}
+                  {rfq.line_items.map((item, idx) => {
+                    const quotedItem = myQuoteItemsMap.get(item.id);
+                    return (
+                      <tr key={item.id} className="hover:bg-zinc-800/30 transition-colors">
+                        <td className="py-3 px-4 font-mono text-zinc-500">{idx + 1}</td>
+                        <td className="py-3 px-4 font-medium text-white">{item.name}</td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-zinc-200">
+                          {Number(item.quantity).toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-zinc-400">{item.unit}</td>
+                        {myQuote && (
+                          <>
+                            <td className="py-3 px-4 text-right font-mono font-semibold text-emerald-300">
+                              {quotedItem
+                                ? `$${Number(quotedItem.unit_price).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                  })}`
+                                : "—"}
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-bold text-emerald-400">
+                              {quotedItem
+                                ? `$${Number(quotedItem.total_price).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                  })}`
+                                : "—"}
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
+                {myQuote && (
+                  <tfoot className="bg-zinc-950/70 border-t border-zinc-800">
+                    <tr>
+                      <td colSpan={4} className="py-3.5 px-4 text-right text-xs font-bold uppercase tracking-wider text-zinc-400">
+                        Total Proposal Amount (Version {myQuote.version}):
+                      </td>
+                      <td colSpan={2} className="py-3.5 px-4 text-right font-mono text-sm font-extrabold text-emerald-400">
+                        ${Number(myQuote.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>

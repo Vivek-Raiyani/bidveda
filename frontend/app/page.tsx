@@ -341,7 +341,7 @@ export default function HomePage() {
                     </div>
                   </Link>
 
-                  <Link
+                  {/* <Link
                     href="/assets"
                     className="group rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 transition-all hover:border-indigo-500/40 hover:bg-zinc-900 shadow-lg"
                   >
@@ -358,7 +358,7 @@ export default function HomePage() {
                       <span>View Files</span>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </div>
-                  </Link>
+                  </Link> */}
                 </>
               )}
 
@@ -402,7 +402,7 @@ export default function HomePage() {
                     </div>
                   </Link>
 
-                  <Link
+                  {/* <Link
                     href="/assets"
                     className="group rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 transition-all hover:border-indigo-500/40 hover:bg-zinc-900 shadow-lg"
                   >
@@ -419,7 +419,7 @@ export default function HomePage() {
                       <span>Manage Files</span>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </div>
-                  </Link>
+                  </Link> */}
                 </>
               )}
 
@@ -463,7 +463,7 @@ export default function HomePage() {
                     </div>
                   </Link>
 
-                  <Link
+                  {/* <Link
                     href="/assets"
                     className="group rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 transition-all hover:border-indigo-500/40 hover:bg-zinc-900 shadow-lg"
                   >
@@ -480,7 +480,7 @@ export default function HomePage() {
                       <span>View Assets</span>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </div>
-                  </Link>
+                  </Link> */}
                 </>
               )}
             </div>

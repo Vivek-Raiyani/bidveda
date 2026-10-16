@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Search,
   ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 
 export default function MyQuotesPage() {
@@ -29,6 +30,11 @@ export default function MyQuotesPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [expandedQuotes, setExpandedQuotes] = useState<Record<string, boolean>>({});
+
+  const toggleQuoteExpand = (id: string) => {
+    setExpandedQuotes((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -224,9 +230,10 @@ export default function MyQuotesPage() {
                 return (
                   <div
                     key={quote.id}
-                    className="flex flex-col md:flex-row md:items-center justify-between gap-5 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-lg hover:border-zinc-700 transition-all"
+                    className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-lg hover:border-zinc-700 transition-all"
                   >
-                    <div className="space-y-2 flex-1">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+                      <div className="space-y-2 flex-1">
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-[11px] font-mono text-zinc-300">
                           Proposal v{quote.version}
@@ -264,9 +271,30 @@ export default function MyQuotesPage() {
                           &ldquo;{quote.notes}&rdquo;
                         </p>
                       )}
+
+                      {quote.items && quote.items.length > 0 && (
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleQuoteExpand(quote.id)}
+                            className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+                          >
+                            <ChevronDown
+                              className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                                expandedQuotes[quote.id] ? "rotate-180" : ""
+                              }`}
+                            />
+                            <span>
+                              {expandedQuotes[quote.id]
+                                ? "Hide Itemized Breakdown"
+                                : `View Itemized Breakdown (${quote.items.length} items)`}
+                            </span>
+                          </button>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-2.5 shrink-0">
+                    <div className="flex items-center gap-2.5 shrink-0 self-start md:self-center">
                       {isRevisable && (
                         <Link
                           href={`/rfqs/${quote.rfq_id}`}
@@ -286,6 +314,57 @@ export default function MyQuotesPage() {
                       </Link>
                     </div>
                   </div>
+
+                  {/* Collapsible Line Items Breakdown */}
+                  {expandedQuotes[quote.id] && quote.items && quote.items.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-zinc-800/80">
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-zinc-900/90 text-[10px] uppercase font-bold tracking-wider text-zinc-400 border-b border-zinc-800">
+                            <tr>
+                              <th className="py-2.5 px-3 w-10">#</th>
+                              <th className="py-2.5 px-3">Item Description</th>
+                              <th className="py-2.5 px-3 text-right">Quantity</th>
+                              <th className="py-2.5 px-3">Unit</th>
+                              <th className="py-2.5 px-3 text-right text-emerald-400">Quoted Unit Price</th>
+                              <th className="py-2.5 px-3 text-right text-emerald-400">Line Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-800/60">
+                            {quote.items.map((it, idx) => (
+                              <tr key={it.id || idx} className="hover:bg-zinc-900/40 transition-colors">
+                                <td className="py-2.5 px-3 font-mono text-zinc-500">{idx + 1}</td>
+                                <td className="py-2.5 px-3 font-medium text-white">
+                                  {it.line_item_name || `Line Item ${idx + 1}`}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-zinc-200">
+                                  {it.quantity ? Number(it.quantity).toLocaleString() : "—"}
+                                </td>
+                                <td className="py-2.5 px-3 text-zinc-400">{it.unit || "units"}</td>
+                                <td className="py-2.5 px-3 text-right font-mono text-emerald-300 font-semibold">
+                                  ${Number(it.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-400">
+                                  ${Number(it.total_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-zinc-900/80 border-t border-zinc-800 text-xs">
+                            <tr>
+                              <td colSpan={4} className="py-2.5 px-3 text-right font-bold uppercase tracking-wider text-[10px] text-zinc-400">
+                                Total Quoted (v{quote.version}):
+                              </td>
+                              <td colSpan={2} className="py-2.5 px-3 text-right font-mono text-xs font-bold text-emerald-400">
+                                ${Number(quote.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 );
               })}
             </div>
