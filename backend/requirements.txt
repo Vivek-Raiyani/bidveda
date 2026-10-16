@@ -1,6 +1,7 @@
 fastapi[standard]
 uvicorn[standard]
-sqlalchemy
+sqlalchemy[asyncio]
+greenlet
 alembic
 pydantic[email]
 pydantic-settings
