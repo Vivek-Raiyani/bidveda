@@ -1,3 +1,6 @@
+from typing import Any
+import json
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -7,6 +10,19 @@ class Settings(BaseSettings):
     STORAGE_PROVIDER: str = "local"
     FRONTEND_URL: str = "http://localhost:3000"
     BACKEND_CORS_ORIGINS: list[str] = ["*"]
+
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            v_trimmed = v.strip()
+            if v_trimmed.startswith("[") and v_trimmed.endswith("]"):
+                try:
+                    return json.loads(v_trimmed)
+                except Exception:
+                    pass
+            return [i.strip() for i in v_trimmed.split(",") if i.strip()]
+        return v
 
     # Auth Settings
     SECRET_KEY: str

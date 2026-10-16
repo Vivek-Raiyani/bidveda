@@ -186,7 +186,6 @@ $RECYCLE.BIN/
 # =============================================================================
 
 # Docker
-.dockerignore
 
 # Temporary files
 *.tmp
